@@ -112,7 +112,9 @@ function activateTab(tabId) {
 
 function updateTabUrl(tab, url) {
   tab.url = url;
-  tab.selectButton.textContent = tabTitle(url, tab.number);
+  const title = tabTitle(url, tab.number);
+  tab.selectButton.textContent = title;
+  tab.closeButton.setAttribute("aria-label", `Close ${title}`);
   if (tab.id === activeTabId) {
     addressInput.value = url;
   }
@@ -136,6 +138,33 @@ function navigate(tab, url) {
   }
 }
 
+function closeTab(tabId) {
+  const tab = tabs.get(tabId);
+  if (!tab) return;
+
+  const tabIds = [...tabs.keys()];
+  const tabIndex = tabIds.indexOf(tabId);
+  tabs.delete(tabId);
+  const frameIndex = controller.frames.indexOf(tab.frame);
+  if (frameIndex !== -1) {
+    controller.frames.splice(frameIndex, 1);
+  }
+  tab.container.remove();
+  tab.page.remove();
+
+  if (tabId !== activeTabId) return;
+
+  const nextTabId = tabIds[tabIndex + 1] ?? tabIds[tabIndex - 1];
+  if (nextTabId !== undefined) {
+    activateTab(nextTabId);
+  } else {
+    activeTabId = null;
+    addressInput.value = "";
+    setStatus("");
+    showPage("home");
+  }
+}
+
 function addTab(url = searchUrl("")) {
   const id = nextTabId++;
   const number = id;
@@ -143,21 +172,38 @@ function addTab(url = searchUrl("")) {
   container.className = "tab";
 
   const selectButton = document.createElement("button");
+  selectButton.className = "tab-select";
   selectButton.type = "button";
   selectButton.setAttribute("role", "tab");
   selectButton.setAttribute("aria-selected", "false");
   selectButton.textContent = `Tab ${number}`;
   selectButton.addEventListener("click", () => activateTab(id));
 
+  const closeButton = document.createElement("button");
+  closeButton.className = "tab-close";
+  closeButton.type = "button";
+  closeButton.setAttribute("aria-label", `Close Tab ${number}`);
+  closeButton.textContent = "×";
+  closeButton.addEventListener("click", () => closeTab(id));
+
   const page = document.createElement("iframe");
   page.className = "page";
   page.title = `Browser tab ${number}`;
 
-  container.append(selectButton);
+  container.append(selectButton, closeButton);
   tabsElement.append(container);
   pagesElement.append(page);
 
-  const tab = { id, number, container, selectButton, page, frame: null, url };
+  const tab = {
+    id,
+    number,
+    container,
+    selectButton,
+    closeButton,
+    page,
+    frame: null,
+    url,
+  };
   tabs.set(id, tab);
   tab.frame = controller.createFrame(page, {
     plugins: [
